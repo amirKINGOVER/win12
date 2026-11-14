@@ -56,6 +56,7 @@ textarea.note{flex:1;border:0;padding:12px;background:transparent;color:var(--tx
 .ft button{border:0;background:transparent;color:var(--tx);font-size:18px;cursor:pointer;border-radius:6px;padding:4px 8px}.ft button:hover{background:var(--bg2)}
 .tg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.tile{font-size:12px;padding:12px 4px;text-align:center}.tile.on{background:var(--ac);color:#fff}
 @media(max-width:600px){.chip,.tray>span:first-child{display:none}#tb{grid-template-columns:1fr auto}#tbc{min-width:0;overflow-x:auto;justify-content:flex-start}}
+@keyframes spin{to{transform:rotate(360deg)}}
 #dim{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:99998}
 #off{position:fixed;inset:0;background:#000;color:#888;display:none;align-items:center;justify-content:center;z-index:99999;font-size:15px;cursor:pointer}
 </style>
@@ -100,7 +101,7 @@ term:{t:"الطرفية",i:"💻",w:400,h:300,build(b){
     else if(c==="ls")out(Object.keys(all).join("  "));else if(c==="cat")out(all[a.join(" ")]??"الملف غير موجود");
     else if(c==="echo")out(a.join(" "));else if(c==="date")out(new Date().toString());else if(c==="whoami")out("user");
     else if(c==="theme")setTheme(a[0]==="light"?"light":"dark");else if(c==="open")APPS[a[0]]?openApp(a[0]):out("تطبيق غير معروف");
-    else if(c==="clear")log.textContent="";else if(c)out(c+": أمر غير معروف");b.scrollTop=b.scrollHeight}}},
+    else if(c==="crash")bsod("CRITICAL_PROCESS_DIED");else if(c==="clear")log.textContent="";else if(c)out(c+": أمر غير معروف");b.scrollTop=b.scrollHeight}}},
 settings:{t:"الإعدادات",i:"⚙️",w:440,h:330,build(b){
   b.style.cssText+="padding:14px;gap:12px";
   b.innerHTML='<div>المظهر</div><div class="seg"><button data-m="light">☀️ فاتح</button><button data-m="dark">🌙 داكن</button><button data-m="auto">🖥️ تلقائي</button></div><div>خلفية سطح المكتب</div><div class="wps"></div>';
@@ -312,6 +313,47 @@ APPS.net={t:'الشبكة',i:'📶',w:360,h:400,build(b,w){
   const t=mk('button','tile','⚡ اختبار السرعة'),o=mk('div','h',sp);t.style.marginTop='10px';
   t.onclick=()=>{if(!NET.ok()){sp='لا يوجد اتصال';o.textContent=sp;return}o.textContent='جارٍ القياس…';setTimeout(()=>{sp='⬇ '+(20+Math.random()*180|0)+' Mbps · ⬆ '+(5+Math.random()*55|0)+' Mbps · ping '+(8+Math.random()*40|0)+' ms';if(o.isConnected)o.textContent=sp},1800)};b.append(t,o)};
  w.render()}};
+const DBIOS=()=>({order:['Windows Boot Manager','USB Drive','Network (PXE)'],fast:false,secure:true,tpm:true});
+let BIOS=DBIOS();try{Object.assign(BIOS,JSON.parse(localStorage.getItem('bios'))||{})}catch(_){}
+const saveB=()=>{try{localStorage.setItem('bios',JSON.stringify(BIOS))}catch(_){}};
+function fullScr(bg,fg){let s=$('scr');if(s)s.remove();s=mk('div');s.id='scr';s.style.cssText='position:fixed;inset:0;z-index:200000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;overflow:auto;background:'+bg+';color:'+fg;document.body.appendChild(s);return s}
+function closeAll(){Object.keys(wins).forEach(id=>{wins[id].el.remove();delete wins[id]});foc=null;refresh();hideMenus();const l=$('lock');if(l)l.remove()}
+function shutdown(){closeAll();const s=$('scr');if(s)s.remove();$('off').style.display='flex'}
+function powerMenu(){hideMenus();const old=$('pm');if(old){old.remove();return}const m=mk('div','glass');m.id='pm';m.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom,0px));z-index:9002;border-radius:10px;padding:6px;min-width:200px';
+ [['⏻ إيقاف التشغيل',shutdown],['🔄 إعادة التشغيل',restartDlg]].forEach(([t,f])=>{const r=mk('div','row',t);r.onclick=()=>{m.remove();f()};m.appendChild(r)});document.body.appendChild(m)}
+document.addEventListener('pointerdown',e=>{const m=$('pm');if(m&&!e.target.closest('#pm,#pw'))m.remove()});
+function boot(){closeAll();
+ if(BIOS.order[0]!=='Windows Boot Manager'||!BIOS.tpm){const s=fullScr('#000','#ddd');s.style.cssText+=';font:15px ui-monospace,monospace;direction:ltr;cursor:pointer;white-space:pre-wrap;padding:20px';
+  s.textContent=(BIOS.tpm?'Boot Device Not Found.\nPlease install an operating system on your hard disk.':'TPM 2.0 is required to start Win 12.')+'\n\nاضغط في أي مكان للدخول إلى BIOS';s.onclick=bios;return}
+ const s=fullScr('#000','#fff'),g=mk('div'),sp=mk('div');g.style.cssText='display:grid;grid-template-columns:repeat(2,44px);gap:5px';
+ for(let i=0;i<4;i++){const q=mk('i');q.style.cssText='width:44px;height:44px;background:#4cc2ff';g.appendChild(q)}
+ sp.style.cssText='width:34px;height:34px;border:4px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin-top:50px';s.append(g,sp);
+ setTimeout(()=>{s.remove();lockScreen()},BIOS.fast?1200:3200)}
+function menuScr(title,items,bg){const s=fullScr(bg||'#0b3a6e','#fff'),h=mk('div','',title);h.style.cssText='font-size:28px;margin-bottom:10px';s.appendChild(h);
+ items.forEach(([t,sub,f])=>{const b=mk('button'),a=mk('div','',t),c=mk('div','',sub);b.style.cssText='width:min(420px,88vw);text-align:right;padding:14px 18px;border:1px solid #ffffff55;border-radius:6px;background:#ffffff14;color:#fff;font-size:16px;cursor:pointer';c.style.cssText='font-size:12px;opacity:.75;margin-top:4px';b.append(a,c);b.onclick=f;s.appendChild(b)});return s}
+function restartDlg(){menuScr('إعادة التشغيل',[['🔄 إعادة تشغيل','إعادة تشغيل Win 12 الآن',()=>boot()],['🛠️ قائمة الإصلاح / BIOS','إعادة التشغيل إلى خيارات الإصلاح وإعدادات UEFI',recov],['إلغاء','',()=>$('scr').remove()]],'rgba(0,0,0,.65)')}
+function recov(){menuScr('اختر خياراً',[['➡️ متابعة','الخروج والمتابعة إلى Win 12',()=>boot()],['🛠️ استكشاف الأخطاء وإصلاحها','إصلاح بدء التشغيل أو إعادة الضبط',repair],['⚙️ إعدادات UEFI (BIOS)','الدخول إلى إعدادات البرنامج الثابت',bios],['⏻ إيقاف تشغيل الكمبيوتر','',shutdown]])}
+function repair(){menuScr('استكشاف الأخطاء وإصلاحها',[['🔧 إصلاح بدء التشغيل','إصلاح المشاكل التي تمنع تحميل النظام',()=>progress('جارٍ تشخيص جهازك…')],['↩️ استعادة النظام','استخدام نقطة استعادة',()=>progress('جارٍ استعادة النظام…')],['🧼 إعادة ضبط هذا الكمبيوتر','حذف الملفات والتطبيقات وكلمة المرور',resetDlg],['⬅️ رجوع','',recov]])}
+function resetDlg(){menuScr('إعادة ضبط هذا الكمبيوتر',[['🗑️ نعم، احذف كل شيء','سيتم حذف الملفات والصور والتطبيقات المثبّتة وإعادة كلمة المرور إلى 1234',()=>{factory();progress('جارٍ إعادة الضبط…')}],['⬅️ إلغاء','',repair]])}
+function factory(){closeAll();INST.forEach(id=>{document.querySelectorAll('[data-a="'+id+'"]').forEach(e=>e.remove());delete APPS[id]});INST=[];FS=JSON.parse(JSON.stringify(DEF));TR={};GAL=[];PW='1234';
+ ['fs','tr','gal','inst','todo','sticky','pw','bios'].forEach(k=>{try{localStorage.removeItem(k)}catch(_){}});BIOS=DBIOS();refresh()}
+function progress(t){const s=fullScr('#0b3a6e','#fff'),m=mk('div','',t),p=mk('div'),i=mk('div');m.style.fontSize='22px';p.style.cssText='width:min(320px,80vw);height:6px;background:#ffffff33;border-radius:3px;overflow:hidden';i.style.cssText='height:100%;width:0;background:#fff;transition:width 3s linear';p.appendChild(i);s.append(m,p);setTimeout(()=>i.style.width='100%',50);setTimeout(boot,3200)}
+function bios(){const D=JSON.parse(JSON.stringify(BIOS));let tab='Main';const s=fullScr('#10131a','#d8dee9');s.style.cssText+=';justify-content:flex-start;align-items:stretch;gap:0;text-align:left;direction:ltr;font:14px ui-monospace,Menlo,Consolas,monospace;cursor:default;overflow:hidden';
+ const hd=mk('div','','AMI UEFI Setup Utility — Win 12 Virtual Board'),tb=mk('div'),bd=mk('div'),ft=mk('div','','اضغط على العنصر الأزرق لتغييره · الحفظ من تبويب Exit');
+ hd.style.cssText='background:#1f4fbf;color:#fff;padding:10px 14px;font-weight:bold';tb.style.cssText='display:flex;gap:2px;background:#1a2030;overflow-x:auto';bd.style.cssText='flex:1;overflow:auto;padding:16px';ft.style.cssText='padding:8px 14px;background:#1a2030;font-size:12px;color:#8a93a6';
+ const row=(a,v,f)=>{const r=mk('div');r.style.cssText='display:flex;justify-content:space-between;gap:12px;padding:8px 6px;border-bottom:1px solid #263047'+(f?';cursor:pointer;color:#7fd1ff':'');r.append(mk('span','',a),mk('span','',v));if(f)r.onclick=f;bd.appendChild(r)};
+ const draw=()=>{tb.innerHTML=bd.innerHTML='';['Main','Boot','Security','Exit'].forEach(t=>{const k=mk('div','',t);k.style.cssText='padding:10px 18px;cursor:pointer;'+(t===tab?'background:#1f4fbf;color:#fff':'');k.onclick=()=>{tab=t;draw()};tb.appendChild(k)});
+  if(tab==='Main'){row('BIOS Version','AMI 12.0.1');row('Processor','Virtual CPU @ 3.60GHz · 8 Cores');row('Memory','16384 MB');row('Storage','Virtual SSD 256 GB');row('System Date',new Date().toLocaleString())}
+  if(tab==='Boot'){row('Fast Boot',D.fast?'[Enabled]':'[Disabled]',()=>{D.fast=!D.fast;draw()});D.order.forEach((d,i)=>row('Boot Option #'+(i+1),d+(i?'  ▲':''),i?()=>{[D.order[i-1],D.order[i]]=[D.order[i],D.order[i-1]];draw()}:null));const n=mk('div','','اضغط على جهاز لرفع أولويته. إن لم يكن Windows Boot Manager أولاً فلن يقلع النظام.');n.style.cssText='margin-top:12px;color:#8a93a6;direction:rtl;text-align:right';bd.appendChild(n)}
+  if(tab==='Security'){row('Secure Boot',D.secure?'[Enabled]':'[Disabled]',()=>{D.secure=!D.secure;draw()});row('TPM 2.0',D.tpm?'[Enabled]':'[Disabled]',()=>{D.tpm=!D.tpm;draw()})}
+  if(tab==='Exit'){row('💾 Save Changes and Exit','',()=>{BIOS=D;saveB();boot()});row('↩ Discard Changes and Exit','',()=>boot());row('⚙ Load Optimized Defaults','',()=>{Object.assign(D,DBIOS());tab='Boot';draw()})}};
+ s.append(hd,tb,bd,ft);draw()}
+let lastBS=0;const bootT=Date.now();
+function bsod(code){lastBS=Date.now();closeAll();const s=fullScr('#0067c0','#fff');s.style.cssText+=';align-items:flex-start;justify-content:flex-start;text-align:right;padding:8vh 8vw;gap:16px';
+ const f=mk('div','',':('),a=mk('div','','واجه جهازك مشكلة ويحتاج إلى إعادة التشغيل. نجمع بعض معلومات الخطأ فقط، وبعدها سنعيد التشغيل لك.'),p=mk('div','','0% مكتمل'),c=mk('div','','رمز التوقف: '+code);
+ f.style.fontSize='90px';a.style.cssText='font-size:22px;max-width:640px';p.style.fontSize='22px';c.style.cssText='font-size:13px;opacity:.85;direction:ltr';s.append(f,a,p,c);let n=0;
+ const iv=setInterval(()=>{n+=Math.random()*12;if(n>=100){clearInterval(iv);boot();return}p.textContent=Math.floor(n)+'% مكتمل'},400)}
+addEventListener('error',e=>{if(Date.now()-bootT<8000||Date.now()-lastBS<30000||!e.message||/ResizeObserver|Script error/.test(e.message))return;bsod('SYSTEM_SERVICE_EXCEPTION')});
 const wins={};let z=10,foc=null;
 function refresh(){Object.keys(APPS).forEach(id=>{const b=$("t_"+id),w=wins[id];b.classList.toggle("run",!!w);b.classList.toggle("on",!!w&&foc===id&&w.el.style.display!=="none")})}
 function focusW(id){const w=wins[id];if(!w)return;w.el.style.display="flex";w.el.style.zIndex=++z;foc=id;refresh()}
@@ -351,7 +393,7 @@ const BASE=Object.keys(APPS);BASE.forEach(addApp);
 INST=INST.filter(id=>STORE[id]);INST.forEach(id=>{APPS[id]=STORE[id];addApp(id)});
 const qk=mk('div','h');$('qs').appendChild(qk);const upd=()=>qk.textContent='💽 C: '+fmt(diskInfo().free)+' متاح';upd();setInterval(upd,5000);
 const lk=mk('button','','🔒');lk.title='قفل';lk.onclick=()=>{hideMenus();lockScreen()};$('pw').before(lk);
-lockScreen();
+boot();
 Object.entries(FS["المستندات"]).forEach(([n,t])=>{const r=mk("div","row","📄 "+n);r.onclick=()=>openApp("notes",{n,t});$("rc").appendChild(r)});
 const menu=(el,other)=>{other.classList.remove("show");el.classList.toggle("show");if(el===$("sm")&&el.classList.contains("show")){$("sq").value="";$("sq").oninput();$("sq").focus()}};
 $("sb").onclick=e=>{e.stopPropagation();menu($("sm"),$("qs"))};$("sr").onclick=$("sb").onclick;
@@ -365,8 +407,8 @@ document.querySelectorAll(".tile:not(#qt)").forEach(t=>t.onclick=()=>t.classList
  t2.onclick=()=>{NET.air=!NET.air;NET.sync();t2.classList.toggle('on',NET.air);rn()}}
 NET.sync();
 $("br").oninput=e=>$("dim").style.opacity=(100-e.target.value)/100*.7;
-$("pw").onclick=()=>{hideMenus();Object.keys(wins).forEach(id=>{wins[id].el.remove();delete wins[id]});foc=null;refresh();$("off").style.display="flex"};
-$("off").onclick=()=>$("off").style.display="none";
+$("pw").onclick=()=>powerMenu();
+$("off").onclick=()=>{$("off").style.display="none";boot()};
 function tick(){const d=new Date();$("tm").textContent=d.toLocaleTimeString("ar",{hour:"2-digit",minute:"2-digit"});$("dt").textContent=d.toLocaleDateString("ar",{day:"numeric",month:"numeric",year:"numeric"});$("qd").textContent=d.toLocaleDateString("ar",{weekday:"long",day:"numeric",month:"long"})}
 tick();setInterval(tick,1000);setTheme(isDark()?"dark":"light");
 </script>
